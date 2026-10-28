@@ -85,12 +85,18 @@ final class SnapshotStore {
         config.width = max(Int(window.frame.width * scale), 1)
         config.height = max(Int(window.frame.height * scale), 1)
         config.showsCursor = false
-        do {
-            return try await SCScreenshotManager.captureImage(
-                contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
-        } catch {
-            log.error("capture of window \(window.windowID) failed: \(error.localizedDescription, privacy: .public)")
-            return nil
+        // The completion-handler API, not the async one: for DRM-protected windows (a movie playing
+        // in the TV app) it reports neither an image nor an error, and the async wrapper traps on that.
+        return await withCheckedContinuation { continuation in
+            SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window),
+                                             configuration: config) { image, error in
+                if let error {
+                    log.error("capture of window \(window.windowID) failed: \(error.localizedDescription, privacy: .public)")
+                } else if image == nil {
+                    log.info("capture of window \(window.windowID) returned nothing (protected content?)")
+                }
+                continuation.resume(returning: image)
+            }
         }
     }
 
