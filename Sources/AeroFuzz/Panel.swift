@@ -24,7 +24,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var columns = 1
     private var selected = 0
 
-    private enum Mode { case grid, windows }
+    private enum Mode { case grid, windows, help }
     private var mode = Mode.grid
     private var entries: [WindowEntry] = []
     private var listView: WindowListView?
@@ -48,7 +48,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     var isShown: Bool { panel.isVisible }
 
-    /// ⌥A: closed → workspace grid → window lister → workspace grid → …
+    /// ⌥A: closed → workspace grid → window lister → workspace grid → … (the hotkey overview goes back to the grid)
     func toggle() {
         guard isShown else { show(); return }
         mode == .grid ? showWindowList() : showGrid()
@@ -166,6 +166,16 @@ final class PanelController: NSObject, NSWindowDelegate {
         list.focusSearch()
     }
 
+    /// ? in the grid: the AeroSpace bindings, read fresh so config edits show up.
+    private func showHelp() {
+        mode = .help
+        let area = currentScreen().visibleFrame
+        let help = HotkeyHelpView(sections: Hotkeys.sections(from: AeroSpace.bindings()),
+                                  configPath: AeroSpace.configPath(),
+                                  maxSize: NSSize(width: area.width * 0.92, height: area.height * 0.92))
+        place(help, size: help.frame.size, cornerRadius: 16)
+    }
+
     func hide() {
         panel.orderOut(nil)
         listView = nil
@@ -191,9 +201,14 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private func handleKey(_ event: NSEvent) -> Bool {
         if mode == .windows { return listView?.handleKey(event) ?? false }
+        if mode == .help { handleHelpKey(event); return true }
         if panel.firstResponder is NSTextView { return false }      // renaming: keys go to the field
         handleGridKey(event)
         return true
+    }
+
+    private func handleHelpKey(_ event: NSEvent) {
+        if event.keyCode == 53 || event.charactersIgnoringModifiers == "?" { showGrid() }  // Esc, ?
     }
 
     private func handleGridKey(_ event: NSEvent) {
@@ -214,6 +229,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         case "j": move(dx: 0, dy: 1)
         case "k": move(dx: 0, dy: -1)
         case "n": if order.indices.contains(selected) { cards[order[selected]]?.beginRename() }
+        case "?": showHelp()
         default:
             if let workspace = keyMap[chars] { choose(workspace) }
         }
@@ -271,7 +287,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         root.layer?.cornerRadius = 16
         root.layer?.masksToBounds = true
 
-        let hint = NSTextField(labelWithString: "hjkl move   ⏎ go   n name   ⌥A windows   esc close")
+        let hint = NSTextField(labelWithString: "hjkl move   ⏎ go   n name   ⌥A windows   ? hotkeys   esc close")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
         hint.alignment = .center

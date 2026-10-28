@@ -80,6 +80,21 @@ enum AeroSpace {
         return name.isEmpty ? nil : name
     }
 
+    /// Binding mode → key ("alt-shift-h") → command ("move left"), read from the running config.
+    /// Multi-command bindings come joined by "; ".
+    static func bindings() -> [String: [String: String]] {
+        struct Mode: Decodable { let binding: [String: String] }
+        guard let data = run(["config", "--get", "mode", "--json"]),
+              let modes = try? JSONDecoder().decode([String: Mode].self, from: data) else { return [:] }
+        return modes.mapValues(\.binding)
+    }
+
+    static func configPath() -> String? {
+        guard let data = run(["config", "--config-path"]) else { return nil }
+        let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.isEmpty ? nil : path
+    }
+
     static func switchTo(_ workspace: String) {
         run(["workspace", workspace])
     }
